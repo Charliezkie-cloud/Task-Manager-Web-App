@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="API/API.csproj" Id="96c8840e-0f98-468d-af48-df2d03c1ec9a" />
+  <Project Path="WebApp/WebApp.csproj" Id="815e7012-f389-4a2b-a9bc-fd65b194d205" />
+</Solution>

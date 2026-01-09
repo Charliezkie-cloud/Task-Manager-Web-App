@@ -1,0 +1,208 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject ITaskApiService taskApiService;
+@using WebApp.Data.Models;
+@using WebApp.Data.Models.DTOs;
+@using WebApp.Services;
+
+<PageTitle>Tasks</PageTitle>
+
+<h3>Tasks</h3>
+
+<button type="button" class="btn btn-primary mb-3" @onclick="OpenCreateModal">New Task</button>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Created At</th>
+            <th>Last Update</th>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (TaskItemResponseDto item in _taskItems)
+        {
+            <tr>
+                <th>@item.Id</th>
+                <td>@item.Created_at.ToShortTimeString()</td>
+                <td>@item.Updated_at.ToShortTimeString()</td>
+                <td>@item.Name</td>
+                <td>@item.Description</td>
+                <td class="d-inline-flex gap-2">
+                    <button class="btn btn-primary" @onclick="() => OpenEditModal(item)">Edit</button>
+                    <button class="btn btn-danger" @onclick="() => DeleteTaskItem(item)">Delete</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (showModal)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditMode ? "Edit Task" : "Add New Task")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal" disabled="@isSaving"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label>Name</label>
+                        <input type="text" @bind="taskName" class="form-control" required />
+                        @if (taskNameError != string.Empty)
+                        {
+                            <div class="text-danger">@taskNameError</div>
+                        }
+                    </div>
+                    <div class="mb-3">
+                        <label>Description</label>
+                        <textarea class="form-control" @bind="taskDescription" required></textarea>
+                        @if (taskDescriptionError != string.Empty)
+                        {
+                            <div class="text-danger">@taskDescriptionError</div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="d-inline-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                        @if (isEditMode)
+                        {
+                            <button type="button" class="btn btn-primary" @onclick="SaveEdit">@(isSaving ? "Saving..." : "Save")</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-primary" @onclick="SaveCreate">@(isCreating ? "Creating..." : "Create")</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TaskItemResponseDto> _taskItems = new List<TaskItemResponseDto>();
+    private bool showModal = false;
+    private bool isEditMode = false;
+    private bool isSaving = false;
+    private bool isCreating = false;
+    private bool isSuccess = false;
+
+    private string taskName = string.Empty;
+    private string taskNameError = string.Empty;
+
+    private string taskDescription = string.Empty;
+    private string taskDescriptionError = string.Empty;
+
+    private int currentTaskId = -1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _taskItems = await taskApiService.GetAllAsync();
+    }
+
+    private async Task DeleteTaskItem(TaskItemResponseDto taskItemResponseDto)
+    {
+        bool response = await taskApiService.DeleteAsync(taskItemResponseDto.Id);
+
+        if (response)
+        {
+            _taskItems.Remove(taskItemResponseDto);
+        }
+    }
+
+    private void OpenEditModal(TaskItemResponseDto taskItemResponseDto)
+    {
+        currentTaskId = taskItemResponseDto.Id;
+        taskName = taskItemResponseDto.Name ?? string.Empty;
+        taskDescription = taskItemResponseDto.Description ?? string.Empty;
+        showModal = true;
+        isEditMode = true;
+    }
+
+    private void OpenCreateModal()
+    {
+        showModal = true;
+        isEditMode = false;
+    }
+
+    private async Task SaveEdit()
+    {
+        isSaving = true;
+
+        ValidateInputs();
+
+        bool response = await taskApiService.UpdateAsync(currentTaskId, new UpdateTaskItemDto()
+        {
+            Name = taskName,
+            Description = taskDescription
+        });
+
+        if (response)
+        {
+            TaskItemResponseDto? responseDto = _taskItems.FirstOrDefault(i => i.Id == currentTaskId);
+
+            if (responseDto != null)
+            {
+                responseDto.Name = taskName;
+                responseDto.Description = taskDescription;
+                isSuccess = true;
+                CloseModal();
+            }
+        }
+
+        isSaving = false;
+    }
+
+    private async Task SaveCreate()
+    {
+        isCreating = true;
+
+        ValidateInputs();
+
+        TaskItemResponseDto responseDto = await taskApiService.CreateAsync(new CreateTaskItemDto()
+        {
+            Name = taskName,
+            Description = taskDescription
+        });
+
+        if (responseDto != null)
+        {
+            _taskItems.Add(responseDto);
+            isSuccess = true;
+            CloseModal();
+        }
+
+        isCreating = false;
+    }
+
+    private void ValidateInputs()
+    {
+        if (taskName.Length < 3 || taskName.Length >= 100)
+            taskNameError = "Task name must be between 3 and 100 characters.";
+        else
+            taskNameError = string.Empty;
+
+        if (taskDescription.Length < 3 || taskDescription.Length >= 500)
+            taskDescriptionError = "Task description must be between 3 and 500 characters.";
+        else
+            taskDescriptionError = string.Empty;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        isEditMode = false;
+
+        taskName = string.Empty;
+        taskNameError = string.Empty;
+
+        taskDescription = string.Empty;
+        taskDescriptionError = string.Empty;
+    }
+}
